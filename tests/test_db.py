@@ -1,0 +1,104 @@
+import sqlite3
+import time
+from datetime import datetime
+from pathlib import PurePosixPath
+
+PATH = PurePosixPath("/DCIM/100APPLE/IMG_0001.JPG")
+MTIME = datetime(2024, 1, 2, 3, 4, 5)
+
+
+def test_contains_false_before_record(tmp_path, open_db):
+    db = open_db(tmp_path / "media.db")
+
+    assert not db.contains(PATH, 3, MTIME)
+
+
+def test_contains_true_after_record(tmp_path, open_db):
+    db = open_db(tmp_path / "media.db")
+    db.record(PATH, 3, MTIME)
+
+    assert db.contains(PATH, 3, MTIME)
+
+
+def test_different_size_is_not_contained(tmp_path, open_db):
+    db = open_db(tmp_path / "media.db")
+    db.record(PATH, 3, MTIME)
+
+    assert not db.contains(PATH, 4, MTIME)
+
+
+def test_get_setting_returns_none_when_unset(tmp_path, open_db):
+    db = open_db(tmp_path / "media.db")
+
+    assert db.get_setting("layout") is None
+
+
+def test_setting_roundtrip_and_persistence(tmp_path, open_db):
+    db = open_db(tmp_path / "media.db")
+    db.set_setting("layout", "{name}")
+    db.close()
+
+    reopened = open_db(tmp_path / "media.db")
+
+    assert reopened.get_setting("layout") == "{name}"
+
+
+def test_set_setting_overwrites(tmp_path, open_db):
+    db = open_db(tmp_path / "media.db")
+    db.set_setting("layout", "a")
+    db.set_setting("layout", "b")
+
+    assert db.get_setting("layout") == "b"
+
+
+def test_upgrades_v0_database_preserving_records(tmp_path, open_db):
+    # a database created by version 0.1.x: media table only, no settings, user_version 0
+    conn = sqlite3.connect(tmp_path / "media.db")
+    conn.executescript(
+        "CREATE TABLE media (afc_path TEXT NOT NULL, st_size INTEGER NOT NULL,"
+        " st_mtime DATETIME NOT NULL, synced_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        " UNIQUE(afc_path, st_size, st_mtime));"
+    )
+    conn.execute(
+        "INSERT INTO media (afc_path, st_size, st_mtime) VALUES (?, ?, ?)",
+        (str(PATH), 3, MTIME.isoformat()),
+    )
+    conn.commit()
+    conn.close()
+
+    db = open_db(tmp_path / "media.db")
+
+    assert db.contains(PATH, 3, MTIME)
+    assert db.get_setting("layout") is None
+    assert db.conn.execute("PRAGMA user_version").fetchone()[0] == 2
+
+
+def test_dedup_survives_host_timezone_change(tmp_path, open_db, monkeypatch):
+    # pymobiledevice3 derives st_mtime via datetime.fromtimestamp (naive local time),
+    # so the same device file yields a different wall-clock in a different timezone.
+    # Dedup must key on the underlying instant, not the local rendering.
+    epoch = 1_700_000_000
+
+    monkeypatch.setenv("TZ", "Europe/Berlin")
+    time.tzset()
+    try:
+        db = open_db(tmp_path / "media.db")
+        db.record(PATH, 100, datetime.fromtimestamp(epoch))
+
+        monkeypatch.setenv("TZ", "America/New_York")
+        time.tzset()
+
+        assert db.contains(PATH, 100, datetime.fromtimestamp(epoch))
+    finally:
+        monkeypatch.undo()
+        time.tzset()
+
+
+def test_records_persist_across_reopen(tmp_path, open_db):
+    db = open_db(tmp_path / "media.db")
+    db.record(PATH, 3, MTIME)
+    db.close()
+
+    reopened = open_db(tmp_path / "media.db")
+
+    assert reopened.contains(PATH, 3, MTIME)
