@@ -1,20 +1,21 @@
-# Regenerates the README demo GIF.  Run:  vhs demo.tape
+# Regenerates the README demo (WebP).  Run:  vhs demo.tape
 #
 # Requires:
 #   - vhs installed (https://github.com/charmbracelet/vhs)
 #   - an iPhone connected over USB, unlocked, and trusted
 #   - `dcimport` on PATH (e.g. `uv tool install .` from this repo)
 #
-# Tune the Sleep after the import to roughly how long your transfer takes,
-# and adjust Width/FontSize if long lines wrap.
+# Tune Sleep to roughly your transfer time, and Height to just fit the output
+# (crop empty space). Resolution is deliberately high: a big FontSize + Width
+# render sharp text that GitHub downscales — a small canvas comes out blurry.
 
-Output .assets/demo.gif
+Output .assets/demo.webp
 
 Set Shell "bash"
-Set FontSize 15
-Set Width 880
-Set Height 140
-Set Padding 18
+Set FontSize 22
+Set Width 1200
+Set Height 240
+Set Padding 20
 Set TypingSpeed 50ms
 Set Theme "Catppuccin Mocha"
 

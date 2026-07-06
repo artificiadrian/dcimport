@@ -8,7 +8,7 @@ Runs are incremental: a local SQLite database records what was copied, so re-run
 
 Beyond a plain copy: filename/folder layout templates, `--since`/`--until` date filtering, HEIC→JPEG conversion, skipping the video half of Live Photos, and a JSON manifest per run.
 
-![demo](.assets/demo.gif)
+![demo](.assets/demo.webp)
 
 ## Install
 
