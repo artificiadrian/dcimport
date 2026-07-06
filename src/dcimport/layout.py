@@ -50,7 +50,7 @@ def parse_layout(template: str) -> Layout:
     unknown = [f for f in fields if f not in _ALLOWED_FIELDS]
 
     if unknown:
-        msg = f"Unknown placeholder(s) {', '.join(unknown)} in layout '{template}'; allowed: {{name}}, {{mtime:...}}"
+        msg = f"Unknown placeholder(s) {', '.join(unknown)} in layout '{template}'; the allowed placeholders are {{name}} and {{mtime:...}}"
         raise InvalidLayoutError(msg)
 
     if "name" not in fields:

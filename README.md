@@ -2,14 +2,13 @@
 
 [![PyPI](https://img.shields.io/pypi/v/dcimport.svg)](https://pypi.org/project/dcimport/) ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-Import photos and videos from an iPhone over USB — straight from its camera roll (`/DCIM`, hence the name) into a folder. No iCloud, no iTunes sync, nothing installed on the phone.
+`dcimport` copies photos and videos from an iPhone (or any iOS device) to a local folder, reading the camera roll (`/DCIM`) over USB via AFC. It bypasses iCloud and iTunes, installs nothing on the device, and only ever reads from it.
 
-- **Incremental** — tracks copied files in a local database, so re-runs fetch only what's new.
-- **Safe** — atomic writes (an interrupted run never leaves a half-file), timestamps preserved, the phone is never touched.
-- **Fast** — downloads run in parallel.
-- **Flexible** — custom filename/folder layouts, date-range filters, HEIC→JPEG, Live Photo skipping, JSON run reports.
+Runs are incremental: a local SQLite database records what was copied, so re-runs fetch only new or changed files. Downloads run in parallel and are committed by atomic rename, so an interrupted run resumes with a plain re-run. Original mtimes are preserved.
 
-![usage](.assets/usage.gif)
+Beyond a plain copy: filename/folder layout templates, `--since`/`--until` date filtering, HEIC→JPEG conversion, skipping the video half of Live Photos, and a JSON manifest per run.
+
+![demo](.assets/demo.gif)
 
 ## Install
 
@@ -30,19 +29,19 @@ Connect the iPhone by USB, unlock it, and tap **Trust**. On Windows, [iTunes or 
 
 ```sh
 dcimport ~/Pictures --layout "{mtime:%Y}/{mtime:%m}/{name}"   # sort into year/month folders
-dcimport ~/Pictures --since 2024-01-01 --convert-heic          # recent photos, converted to JPEG
-dcimport ~/Pictures --manifest run.json                        # also write a JSON report
+dcimport ~/Pictures --since 2024-01-01 --convert-heic         # recent photos, converted to JPEG
+dcimport ~/Pictures --manifest run.json                       # also write a JSON report
 ```
 
 Run `dcimport --help` for the full list of options.
 
 ## Layout
 
-`--layout` is a template of `{name}` (original filename) and `{mtime:...}` (capture time, [strftime](https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes) codes), and may contain `/` for subfolders. The default is `{mtime:%Y-%m-%d_%H-%M-%S}_{name}` → `2024-01-02_03-04-05_IMG_0001.JPG`. It's saved to the library on first use and reused afterward; changing it needs `--force`.
+`--layout` is a template of `{name}` (original filename) and `{mtime:...}` (capture time, [strftime](https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes) codes), and may contain `/` for subfolders. The default is `{mtime:%Y-%m-%d_%H-%M-%S}_{name}` → `2024-01-02_03-04-05_IMG_0001.JPG`. The layout is stored with the library on first use and reused on later runs; changing it requires `--force`.
 
 ## How it tracks files
 
-Files are recorded by on-device path, size, and modification time, and skipped on later runs. Editing a photo on the phone changes its mtime, so it re-imports as a new file; deleting `media.db` re-imports everything. Local files are never overwritten — clashes get a `_1`, `_2`, … suffix.
+Each copied file is recorded — by on-device path, size, and modification time — in `media.db` inside the output directory, and skipped on later runs. Editing a photo on the phone changes its mtime, so it re-imports as a new file; deleting `media.db` re-imports everything. Local files are never overwritten — name clashes get a `_1`, `_2`, … suffix.
 
 ## Development
 

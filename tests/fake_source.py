@@ -32,6 +32,8 @@ class FakeSource:
     device_name: str | None = None
     active_downloads: int = 0
     max_concurrent_downloads: int = 0
+    active_stats: int = 0
+    max_concurrent_stats: int = 0
 
     def add(self, path: str, data: bytes = b"x", mtime: datetime = DEFAULT_MTIME):
         self.files[path] = FakeFile(data=data, mtime=mtime)
@@ -60,12 +62,20 @@ class FakeSource:
 
     async def stat(self, path: PurePosixPath):
         self.stat_calls[str(path)] += 1
+        self.active_stats += 1
+        self.max_concurrent_stats = max(self.max_concurrent_stats, self.active_stats)
 
-        if str(path) in self.dirs:
-            return DirEntry()
+        try:
+            # yield to the event loop so overlapping stats are observable
+            await asyncio.sleep(0)
 
-        file = self.files[str(path)]
-        return FileStat(size=len(file.data), mtime=file.mtime)
+            if str(path) in self.dirs:
+                return DirEntry()
+
+            file = self.files[str(path)]
+            return FileStat(size=len(file.data), mtime=file.mtime)
+        finally:
+            self.active_stats -= 1
 
     async def download(self, path: PurePosixPath, target: Path):
         self.download_calls[str(path)] += 1

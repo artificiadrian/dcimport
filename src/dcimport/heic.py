@@ -9,7 +9,7 @@ class MissingHeicSupportError(Exception):
 
     def __init__(self):
         super().__init__(
-            "HEIC conversion requires pillow-heif; install it with: pip install dcimport[heic]"
+            "HEIC conversion requires the 'heic' extra. Install it with: pip install dcimport[heic]"
         )
 
 

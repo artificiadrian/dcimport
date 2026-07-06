@@ -99,3 +99,24 @@ def test_until_filters_out_newer_files():
 
     assert [p.afc_path.name for p in plan.to_download] == ["OLD.JPG"]
     assert PurePosixPath("/DCIM/100APPLE/NEW.JPG") in plan.ignored
+
+
+def test_scan_stats_files_concurrently():
+    source = FakeSource()
+    for i in range(6):
+        source.add(f"/DCIM/100APPLE/IMG_000{i}.JPG")
+
+    asyncio.run(plan_import(source, InMemoryDb()))
+
+    assert source.max_concurrent_stats >= 2
+
+
+def test_scan_reports_running_count():
+    counts = []
+
+    asyncio.run(
+        plan_import(make_source(), InMemoryDb(), on_scan_progress=counts.append)
+    )
+
+    # one callback per stat'd candidate (the two wanted files), counting up
+    assert counts == [1, 2]

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from rich.console import Console
 from rich.filesize import decimal as human_size
+from rich.markup import escape
 from rich.progress import (
     BarColumn,
     DownloadColumn,
@@ -244,12 +245,12 @@ class _RunStats:
 
     def line(self):
         text = (
-            f"Imported [bold][green]{self._new}[/bold] new[/green]"
-            f" and skipped [bold][yellow]{self._existing}[/bold] existing[/yellow] files"
+            f"Imported [bold green]{self._new}[/bold green] new"
+            f" and skipped [bold yellow]{self._existing}[/bold yellow] existing files"
         )
 
         if self._failed:
-            text += f" ([bold][red]{self._failed}[/bold] failed[/red])"
+            text += f" ([bold red]{self._failed}[/bold red] failed)"
 
         return text
 
@@ -293,12 +294,12 @@ async def _download_all(
 
             if isinstance(file, FailedFile):
                 progress.console.print(
-                    f"[red]Failed to download '{file.afc_path}': {file.error}[/red]"
+                    f"[red]Failed to download[/red] [blue]{file.afc_path}[/blue]: {file.error}"
                 )
 
             if config.verbose:
                 progress.console.print(
-                    f"{'Downloaded new' if isinstance(file, NewFile) else 'Failed'} file '{file.afc_path}'"
+                    f"{'Downloaded' if isinstance(file, NewFile) else 'Failed'} [dim]{file.afc_path}[/dim]"
                 )
 
             progress.advance(task, file.stat.size)
@@ -318,12 +319,12 @@ def _report_failures(console: Console, results: list[NewFile | FailedFile]):
         return
 
     console.print(
-        "\n[bold yellow]These files could not be downloaded"
-        " (re-run the same command to retry them):[/]"
+        "\n[bold yellow]Some files could not be downloaded.[/]"
+        " Re-run the same command to retry them:"
     )
 
     for file in failed:
-        console.print(f"  - {file.afc_path}: {file.error}")
+        console.print(f"  - [blue]{file.afc_path}[/blue]: {file.error}")
 
 
 def _write_manifest(path: Path, plan: ImportPlan, results: list[NewFile | FailedFile]):
@@ -375,14 +376,17 @@ async def _run_import(console: Console, config: ImportConfig):
         source = None
 
         try:
-            with console.status("Connecting to iPhone..."):
+            with console.status("Connecting to your device…"):
                 source = await afc_connect(udid=config.udid)
 
+            device_name = source.device_name or "your device"
             console.print(
-                f"Connected to [bold blue]{source.device_name or 'unknown device'}[/bold blue]"
+                f"Importing media from [blue]{config.dcim_path}[/blue] on"
+                f" [bold blue]{device_name}[/bold blue] to"
+                f" [blue]{config.output_path.absolute()}[/blue]"
             )
 
-            with console.status("Scanning iPhone for media files..."):
+            with console.status("Scanning for media files…") as status:
                 plan = await plan_import(
                     source,
                     db,
@@ -391,12 +395,15 @@ async def _run_import(console: Console, config: ImportConfig):
                     skip_live_videos=config.skip_live_videos,
                     since=config.since,
                     until=config.until,
+                    on_scan_progress=lambda n: status.update(
+                        f"Scanning for media files… ({n} found)"
+                    ),
                 )
 
             console.print(
-                f"Found [bold][green]{len(plan.to_download)}[/bold] new[/green] files ({human_size(plan.total_bytes)}),"
-                f" [bold][yellow]{len(plan.existing)}[/bold] already imported[/yellow],"
-                f" {len(plan.ignored)} ignored"
+                f"Found [bold green]{len(plan.to_download)}[/bold green] new files ({human_size(plan.total_bytes)}),"
+                f" [bold yellow]{len(plan.existing)}[/bold yellow] already imported,"
+                f" [dim]{len(plan.ignored)} ignored[/dim]"
             )
 
             if not plan.to_download:
@@ -423,7 +430,7 @@ async def _run_import(console: Console, config: ImportConfig):
                 )
                 return 1
 
-            console.print(f"[bold green]Import completed![/] {stats.line()}")
+            console.print(f"[bold green]Import completed.[/] {stats.line()}")
             return 0
         finally:
             if source is not None:
@@ -477,65 +484,62 @@ def main(
 
     console = Console()
 
-    console.print(
-        f"Importing media files from [blue]'{dcim_path}'[/blue] on your iPhone to [blue]'{output_path.absolute()}'[/blue]"
-    )
-
     try:
         exit_code = asyncio.run(_run_import(console, config))
 
     except MultipleDevicesError as e:
-        console.print("\n[red]Multiple devices are connected:[/red]")
+        console.print("\n[red]More than one device is connected:[/red]")
 
         for device_udid in e.udids:
             console.print(f"  - {device_udid}")
 
         console.print(
-            "Pass [bold]--udid <UDID>[/bold] to choose which device to import from."
+            "Pass [bold]--udid <UDID>[/bold] to pick the device to import from."
         )
         return 1
 
     except LayoutConflictError as e:
         console.print(
-            f"\n[red]{e}[/red]\nPass [bold]--force[/bold] to switch this library to the new layout"
+            f"\n[red]{escape(str(e))}[/red]\nPass [bold]--force[/bold] to switch this library to the new layout"
             " (already-imported files keep their names)."
         )
         return 1
 
     except InvalidLayoutError as e:
-        console.print(f"\n[red]{e}[/red]")
+        console.print(f"\n[red]{escape(str(e))}[/red]")
         return 1
 
     except MissingHeicSupportError as e:
-        console.print(f"\n[red]{e}[/red]")
+        console.print(f"\n[red]{escape(str(e))}[/red]")
         return 1
 
     except ConnectionError:
         _maybe_traceback(console, verbose)
         console.print(
-            "\n[red]An error occurred while connecting to your iPhone.[/red]\n - If you are using Windows, please ensure that the iTunes/Apple Devices app is installed and running.\n - Check the USB connection to your iPhone.\n - Ensure your iPhone is unlocked and trusted.\n"
+            "\n[red]Could not connect to your device.[/red]\n"
+            " - Check the USB connection.\n"
+            " - Make sure your device is unlocked and trusts this computer.\n"
+            " - On Windows, make sure the iTunes or Apple Devices app is installed and running.\n"
         )
-        console.print("[bold red]Import failed![/]")
+        console.print("[bold red]Import failed.[/]")
         return 1
 
     except KeyboardInterrupt:
         console.print(
-            "\n[bold red]Import cancelled.[/] Files already downloaded were saved —"
-            " run the same command again to resume."
+            "\n[bold yellow]Import cancelled.[/] Finished downloads were kept —"
+            " re-run the same command to pick up where you left off."
         )
         return 130
 
     except Exception as e:
         _maybe_traceback(console, verbose)
         hint = (
-            "Check the error message above for more details."
+            "See the traceback above for details."
             if verbose
-            else f"{e}\nRe-run with [bold]--verbose[/bold] for a full traceback."
+            else f"{escape(str(e))}\nRe-run with [bold]--verbose[/bold] for a full traceback."
         )
-        console.print(
-            f"\n[red]An unexpected error occurred while importing media files. {hint}[/red]\n"
-        )
-        console.print("[bold red]Import failed![/]")
+        console.print(f"\n[red]An unexpected error occurred. {hint}[/red]\n")
+        console.print("[bold red]Import failed.[/]")
         return 1
 
     else:

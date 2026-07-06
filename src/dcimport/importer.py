@@ -1,6 +1,7 @@
 import asyncio
+import itertools
 import os
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Protocol
@@ -24,7 +25,7 @@ class LayoutConflictError(Exception):
 
     def __init__(self, stored: str, requested: str):
         super().__init__(
-            f"Requested layout '{requested}' differs from this library's stored layout '{stored}'."
+            f"The requested layout '{requested}' does not match this library's stored layout '{stored}'."
         )
         self.stored = stored
         self.requested = requested
@@ -176,10 +177,13 @@ async def plan_import(
     skip_live_videos: bool = False,
     since: datetime | None = None,
     until: datetime | None = None,
+    on_scan_progress: Callable[[int], None] | None = None,
+    stat_concurrency: int = 16,
 ):
     """Scan `source` and classify every entry. Read-only: downloads and writes nothing.
     With `skip_live_videos`, the video halves of Live Photos are ignored. `since`/`until`
-    bound the files to import by modification time (inclusive)."""
+    bound the files to import by modification time (inclusive). `on_scan_progress` is
+    called with the running count of files stat'ed, for live feedback during the scan."""
 
     wanted_extensions = {
         normalized
@@ -194,27 +198,25 @@ async def plan_import(
         if path.suffix.lower() in LIVE_PHOTO_IMAGE_EXTENSIONS
     }
 
-    to_download, existing, ignored = [], [], []
+    ignored = []
+    candidates = []
 
     for path in entries:
-        # filter on extension before stat'ing to save a USB round-trip per file
-        if path.suffix.lower()[1:] not in wanted_extensions:
-            ignored.append(path)
-            continue
-
-        if skip_live_videos and _is_live_photo_video(path, image_keys):
-            ignored.append(path)
-            continue
-
-        stat = await source.stat(path)
-
-        if isinstance(stat, DirEntry):
-            ignored.append(path)
-            continue
-
-        if (since is not None and stat.mtime < since) or (
-            until is not None and stat.mtime > until
+        # filter on extension (and Live Photo videos) before stat'ing, to save a
+        # USB round-trip per file that would be ignored anyway
+        if path.suffix.lower()[1:] not in wanted_extensions or (
+            skip_live_videos and _is_live_photo_video(path, image_keys)
         ):
+            ignored.append(path)
+        else:
+            candidates.append(path)
+
+    stats = await _stat_all(source, candidates, stat_concurrency, on_scan_progress)
+
+    to_download, existing = [], []
+
+    for path, stat in zip(candidates, stats, strict=True):
+        if isinstance(stat, DirEntry) or _outside_dates(stat, since, until):
             ignored.append(path)
             continue
 
@@ -230,6 +232,36 @@ async def plan_import(
         existing=tuple(existing),
         ignored=tuple(ignored),
     )
+
+
+def _outside_dates(stat: FileStat, since: datetime | None, until: datetime | None):
+    """Whether a file's modification time falls outside the inclusive [since, until] range."""
+
+    return (since is not None and stat.mtime < since) or (
+        until is not None and stat.mtime > until
+    )
+
+
+async def _stat_all(
+    source: MediaSource,
+    paths: Sequence[PurePosixPath],
+    concurrency: int,
+    on_progress: Callable[[int], None] | None,
+):
+    """Stat every path concurrently (one USB round-trip each), preserving input order.
+    Reports a running count to `on_progress` as each stat completes."""
+
+    semaphore = asyncio.Semaphore(concurrency)
+    completed = itertools.count(1)
+
+    async def stat_one(path: PurePosixPath):
+        async with semaphore:
+            stat = await source.stat(path)
+        if on_progress is not None:
+            on_progress(next(completed))
+        return stat
+
+    return await asyncio.gather(*(stat_one(path) for path in paths))
 
 
 async def _download_to_temp(

@@ -90,13 +90,13 @@ async def afc_connect(udid: str | None = None, retries: int = 3) -> AfcSource:
             await asyncio.sleep(2**i)  # exponential backoff
 
         except Exception as e:
-            msg = "Failed to connect to iPhone due to an unknown error"
+            msg = "Failed to connect to the device due to an unexpected error"
             raise ConnectionError(msg) from e
 
         else:
             return source
 
-    msg = f"Failed to connect to iPhone after {retries} retries"
+    msg = f"Failed to connect to the device after {retries} attempts"
     raise ConnectionError(msg) from _e
 
 
