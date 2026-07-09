@@ -3,7 +3,9 @@
 [![PyPI](https://img.shields.io/pypi/v/dcimport.svg)](https://pypi.org/project/dcimport/) ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 `dcimport` imports photos and videos from an iPhone to a local folder over USB. It works without iCloud or iTunes, installs nothing on the device, and only ever reads from it.
+
 Runs are incremental: a local SQLite database records what was copied, so re-runs fetch only new or changed files. Downloads run in parallel and are committed by atomic rename, so an interrupted run resumes with a plain re-run. Original mtimes are preserved.
+
 Beyond a plain copy: filename/folder layout templates, `--since`/`--until` date filtering, HEIC-to-JPEG conversion, skipping the video half of Live Photos, and a JSON manifest per run.
 
 ![demo](.assets/demo.webp)
