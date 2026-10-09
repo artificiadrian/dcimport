@@ -6,6 +6,8 @@
 
 Imports are incremental. A local database tracks completed files, so later runs copy only new or changed media. Interrupted imports continue when you run the same command again.
 
+> **Prefer a window to a terminal?** [Rollport](https://artificiadrian.github.io/rollport/) is the same idea as a desktop app for Windows, macOS and Linux.
+
 <img src="https://raw.githubusercontent.com/artificiadrian/dcimport/main/.assets/demo.webp" alt="dcimport importing media from an iPhone" width="900">
 
 ## Installation
