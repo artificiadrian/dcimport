@@ -1,12 +1,12 @@
 # dcimport
 
+> **Prefer a window to a terminal?** [Rollport](https://artificiadrian.github.io/rollport/) is the same idea as a desktop app for Windows, macOS and Linux.
+
 [![PyPI](https://img.shields.io/pypi/v/dcimport.svg)](https://pypi.org/project/dcimport/) ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 `dcimport` copies photos and videos from an iPhone to a local folder over USB. It reads directly from the device without iCloud and installs nothing on the phone.
 
 Imports are incremental. A local database tracks completed files, so later runs copy only new or changed media. Interrupted imports continue when you run the same command again.
-
-> **Prefer a window to a terminal?** [Rollport](https://artificiadrian.github.io/rollport/) is the same idea as a desktop app for Windows, macOS and Linux.
 
 <img src="https://raw.githubusercontent.com/artificiadrian/dcimport/main/.assets/demo.webp" alt="dcimport importing media from an iPhone" width="900">
 
